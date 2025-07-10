@@ -438,6 +438,18 @@ setup_user() {
     info "User $username setup complete."
 }
 
+# Function to apply dotfiles using chezmoi
+apply_dotfiles() {
+    local dotfiles_repo=$1
+    info "Initializing and applying dotfiles from $dotfiles_repo..."
+    if ! command_exists chezmoi; then
+        error "chezmoi is not installed. Please install it first."
+        exit 1
+    fi
+    chezmoi init --apply "$dotfiles_repo"
+    info "Dotfiles applied successfully."
+}
+
 # Main installation logic
 main() {
     os=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -453,21 +465,33 @@ main() {
     fi
 
     local username=""
-    if [ "${1:-}" = "-u" ] || [ "${1:-}" = "--user" ]; then
-        if [ -z "${2:-}" ]; then
-            error "Argument for $1 is missing"
+    local dotfiles_repo=""
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        -u | --user)
+            if [ -z "${2:-}" ]; then
+                error "Argument for $1 is missing"
+                exit 1
+            fi
+            username="$2"
+            shift 2
+            ;;
+        -d | --dotfiles)
+            if [ -z "${2:-}" ]; then
+                error "Argument for $1 is missing"
+                exit 1
+            fi
+            dotfiles_repo="$2"
+            shift 2
+            ;;
+        *)
+            error "Unknown argument: $1"
             exit 1
-        fi
-        username="$2"
-        shift 2
-    fi
+            ;;
+        esac
+    done
 
     machine=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
-
-    if ! command_exists wget; then
-        error "wget is not installed. Please install it first."
-        exit 1
-    fi
 
     if ! command_exists curl; then
         error "curl is not installed. Please install it first."
@@ -510,6 +534,10 @@ main() {
 
     if [ -n "$username" ]; then
         setup_user "$username" "$os" "$linux_distro_id"
+    fi
+
+    if [ -n "$dotfiles_repo" ]; then
+        apply_dotfiles "$dotfiles_repo"
     fi
 }
 
