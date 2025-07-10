@@ -7,6 +7,16 @@
 		"dockerfile": "Dockerfile"
 		// Uncomment to use a specific Dockerfile context. More info: https://containers.dev/guide/dockerfile#context.
 		// "context": ".."
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"foxundermoon.shell-format"
+			],
+			"settings": {
+				"shellformat.path": "/usr/bin/shfmt"
+			}
+		}
 	}
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
