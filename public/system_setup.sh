@@ -276,6 +276,67 @@ install_bottom() {
     rm -rf "$temp_dir"
 }
 
+install_eza() {
+    install_jq
+
+    info "Checking for the latest version of eza..."
+    local latest_version=$(curl -s "https://api.github.com/repos/eza-community/eza/releases/latest" | jq -r '.tag_name' | sed 's/v//')
+
+    if command_exists eza; then
+        local current_version=$(eza --version | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | cut -d ' ' -f 1 | sed 's/v//')
+        if [ "$current_version" = "$latest_version" ]; then
+            info "eza is already up to date (version $current_version)."
+            return
+        else
+            info "A new version of eza is available: $latest_version (you have $current_version)."
+        fi
+    fi
+
+    info "Installing the latest version of eza..."
+
+    local machine=$(uname -m | sed 's/amd64/x86_64/;s/arm64/aarch64/')
+    local download_url=""
+    local file_ext=""
+
+    file_ext="tar.gz"
+    bin_download_url="https://github.com/eza-community/eza/releases/download/v${latest_version}/eza_${machine}-unknown-linux-gnu.${file_ext}"
+    completions_download_url="https://github.com/eza-community/eza/releases/download/v${latest_version}/completions-${latest_version}.${file_ext}"
+    man_download_url="https://github.com/eza-community/eza/releases/download/v${latest_version}/man-${latest_version}.${file_ext}"
+
+    local temp_dir=$(mktemp -d)
+    cd "$temp_dir"
+    info "Downloading eza from ${bin_download_url}"
+    curl -L "$bin_download_url" -o "eza.${file_ext}"
+    curl -L "$completions_download_url" -o "completions.${file_ext}"
+    curl -L "$man_download_url" -o "man.${file_ext}"
+
+    info "Extracting eza..."
+
+    mkdir -p /usr/local/bin
+    run_as_root tar -xzf "eza.${file_ext}" --directory=/usr/local/bin
+    chmod +x /usr/local/bin/eza
+    mkdir completions
+    tar -xzf "completions.${file_ext}" --directory=completions
+    run_as_root mkdir -p /usr/local/share/zsh/site-functions
+    run_as_root mkdir -p /usr/local/share/bash-completion/completions
+    run_as_root mkdir -p /usr/share/fish/vendor_completions.d
+    run_as_root mv "$temp_dir/completions/target/completions-${latest_version}/_eza" /usr/local/share/zsh/site-functions/_eza
+    run_as_root mv "$temp_dir/completions/target/completions-${latest_version}/eza" /usr/local/share/bash-completion/completions/eza
+    run_as_root mv "$temp_dir/completions/target/completions-${latest_version}/eza.fish" /usr/share/fish/vendor_completions.d/eza.fish
+    mkdir man
+    tar -xzf "man.${file_ext}" --directory=man
+    mkdir -p /usr/local/share/man/man1
+    run_as_root mv "$temp_dir/man/target/man-${latest_version}/eza.1" /usr/local/share/man/man1/eza.1
+    mkdir -p /usr/local/share/man/man5
+    run_as_root mv "$temp_dir/man/target/man-${latest_version}/eza_colors.5" /usr/local/share/man/man5/eza_colors.5
+    run_as_root mv "$temp_dir/man/target/man-${latest_version}/eza_colors-explanation.5" /usr/local/share/man/man5/eza_colors-explanation.5
+
+    info "eza installed successfully."
+
+    cd -
+    rm -rf "$temp_dir"
+}
+
 # Function to install packages on Arch Linux
 setup_arch() {
     info "Installing packages for Arch Linux..."
@@ -321,9 +382,11 @@ setup_alpine() {
 # Function to install packages on Fedora
 setup_fedora() {
     info "Installing packages for Fedora..."
-    local packages="bat curl wget git vim fastfetch fzf fd-find ripgrep neovim fish zoxide zsh tmux"
+    local packages="bat curl wget git vim fastfetch fzf fd-find ripgrep neovim fish zoxide zsh tmux procps-ng"
     if [ "$VERSION_ID" -lt 42 ]; then
         packages="$packages eza"
+    else
+        install_eza
     fi
     run_as_root dnf install -y $packages
     install_chezmoi
